@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Tampilkan Alert</title>
+		<style type="text/css">
+			#map {
+				border: 1px solid red;
+			}
+
+			#map-container {
+				position: relative;
+			}
+			.vertex {
+				width: 20px;
+				height: 20px;
+				position: absolute;
+				fill: red;
+				border-radius: 50%;
+				cursor: pointer;
+			}
+			.edge {
+				stroke: cyan;
+				stroke-width: 2;
+			}
+
+			.vertex.selected {
+				fill: yellow;
+			}
+
+			.edge.selected {
+				fill: magenta;
+			}
+			#map-handler {
+				position:  absolute;
+				top:  0;
+				left: 0;
+			}
+            body{
+                text-align: center;
+				background-color: #9adbb3;
+            }
+			.route-item {
+				padding: 20px 10px;
+				border: 1px solid black;
+				cursor: pointer;
+			}
+			.route-item:hover {
+				background-color: cyan;
+			}
+			.apar-name {
+				text-align: center;
+				margin-top: 0px;
+				text-transform: uppercase;
+				color : red;
+
+			}
+			.apar-distance{
+				text-align: center;
+			}
+			.routes {
+				text-align: left;
+			}
+		</style>
+		<script type="text/javascript" src="jquery-3.6.0.min.js"></script>
+	</head>
+	<body>
+        <h1>Peringatan Kebakaran</h1>
+		<div id="status-container">status: <span id="status">-</span></div>
+		<div>Apar yang terdekat dengan api</div>
+        <div id="no-data">Tidak ada peringatan kebakaran</div>
+		<div id="data" style="margin-top: 10px;"></div>
+
+		<div id="result-template" style="display: none;">
+			<div class="route-item">
+				<h3 class="apar-name">:APAR_NAME:</h3>
+				<div class="apar-distance"><b>Jarak = :APAR_DISTANCE:</b></div>
+				<div class="routes"><ol>:ROUTES:</ol></div>
+			</div>
+		</div>
+
+        <script type="text/javascript">
+			var is_loading = false;
+			var last_id = '';
+
+			function get_alert(){ 
+				if(is_loading)
+					return;
+				is_loading = true;
+				$('#status').html('updating data...');
+				$.ajax({
+					url: "get_alert.php",
+					dataType: 'json',
+					success: function(result){
+						$('#status').html(result.data.updated);
+						if(last_id == result.data.id){
+							is_loading = false;
+							return;
+						}
+
+						$('#no-data').toggle(result.data.routes.length == 0);
+						$('#data').toggle(result.data.routes.length > 0);
+
+						var template = $('#result-template').html();
+						var all_routes = "";
+						for(var i in result.data.routes){
+							var c_route = result.data.routes[i];
+							var route_step = '';
+							for(var j in c_route.route){
+								route_step += '<li>'+c_route.route[j].name+'</li>';
+							}
+							all_routes += template
+											.replace(':APAR_NAME:', c_route.obj.name)
+											.replace(':APAR_DISTANCE:', c_route.distance)
+											.replace(':ROUTES:', route_step);
+						}
+						$('#data').html(all_routes);
+
+						last_id = result.data.id;
+						is_loading = false;
+					},
+					error: function(){
+						is_loading = false;
+					}
+				});
+			}
+
+            $(document).ready(function(){
+				get_alert();
+
+                setInterval(get_alert, 15000
+			);
+            });
+        </script>
+    </body>
+</html>

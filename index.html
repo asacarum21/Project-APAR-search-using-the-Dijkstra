@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Sample Click Coordinate</title>
+		<style type="text/css">
+			#map {
+				border: 1px solid red;
+			}
+
+			#map-container {
+				position: relative;
+			}
+
+			.vertex {
+				width: 20px;
+				height: 20px;
+				position: absolute;
+				fill: red;
+				border-radius: 50%;
+				cursor: pointer;
+			}
+
+			.edge {
+				stroke: cyan;
+				stroke-width: 2;
+			}
+
+			.vertex.selected {
+				fill: yellow;
+			}
+
+			.edge.selected {
+				fill: magenta;
+			}
+
+			#map-handler {
+				position:  absolute;
+				top:  0;
+				left: 0;
+			}
+		</style>
+		<script type="text/javascript" src="jquery-3.6.0.min.js"></script>
+	</head>
+	<body>
+		<div id="map-container">
+			<img id="map" src="map.PNG"/>
+			<svg id="map-handler" width="800" height="759"></svg>
+		</div>
+		<div>
+			<div>Status = <span id="status">-</span></div>
+			<div>
+				Vertex ID = <span id="vertex_id" class="info">-</span> |
+				Name = <span id="vertex_name" class="info">-</span> |
+				X = <span id="vertex_x" class="info">-</span>, Y = <span id="vertex_y" class="info">-</span>
+			</div>
+			<div style="margin-top: 10px;">
+				From : <select id="vertex-from" class="select-vertex"></select> &rarr;
+				To : <select id="vertex-to" class="select-vertex"></select>
+				<button id="btn-connect" type="button" class="actions">Hubungkan</button>
+			</div>
+		</div>
+		<h3>Vertex List</h3>
+		<ol id="vertex-list"></ol>
+		<h3>Edge List</h3>
+		<ol id="edge-list"></ol>
+		<div>
+			<button type="button" id="btn-save">Simpan Graph</button>
+		</div>
+
+		<script type="text/javascript">
+			var VERTEX_SIZE = 20;
+			var vertex_id = 1;
+			var vertexs = [];
+			var edges = [];
+			var connect = false;
+
+			function rebuild_select(){
+				var select_item = '';
+				for(var i in vertexs){
+					select_item += '<option value="' + vertexs[i].id + '">' + vertexs[i].name + '</option>';
+				}
+				$('.select-vertex').html(select_item);
+				$('.actions').prop('disabled', vertexs.length <= 1);
+			}
+
+			function rebuild_keterangan(){
+				$('#vertex-list').html('');
+				for(var i in vertexs){
+					var c = vertexs[i];
+					$('#vertex-list').append('<li id="list_'+c.id+'"><button type="button" onclick="delete_vertex('+c.id+');">x</button> Nama = '+c.name+' | ID = '+c.id+' | (X, Y) = ('+ c.x +', ' + c.y + ')</li>');
+				}
+				$('#edge-list').html('');
+				for(var i in edges){
+					var c = edges[i];
+					var from_obj = find_vertex(c.from);
+					var to_obj = find_vertex(c.to);
+					$('#edge-list').append('<li><button type="button" onclick="delete_edge('+c.from+', '+c.to+');">x</button> From = '+ from_obj.name +', To = ' + to_obj.name + '</li>');
+				}
+			}
+
+			function makeSVGEl(tag, attrs) {
+			    var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+			    for (var k in attrs) {
+			      el.setAttribute(k, attrs[k]);
+			    }
+			    return el;
+			}
+
+			function find_vertex(id){
+				for(var i in vertexs){
+					if(id == vertexs[i].id)
+						return i;
+				}
+				return -1;
+			}
+
+			function rebuild_graph(){
+				$("#map-handler").empty();
+
+				var svg = document.querySelector("#map-handler");
+				for(var i in edges){
+					var from = find_vertex(edges[i].from);
+					var to = find_vertex(edges[i].to);
+
+					svg.appendChild(makeSVGEl("line", {
+					    x1: from.x,
+					    y1: from.y,
+					    x2: to.x,
+					    y2: to.y,
+					    class: 'edge',
+					    id: 'edge_' + from.id + '-' + to.id
+					  }));
+				}
+				for(var i in vertexs){
+					var c = vertexs[i];
+
+					svg.appendChild(makeSVGEl("circle", {
+					    cx: c.x,
+					    cy: c.y,
+					    r: VERTEX_SIZE/2,
+					    class: 'vertex',
+					    id: 'vertex_' + c.id,
+					    onclick: 'select_vertex('+c.id+')'
+					  }));
+				}
+
+				rebuild_select();
+				rebuild_keterangan();
+			}
+
+			function find_vertex(id){
+				for(var i in vertexs){
+					var c = vertexs[i];
+					if(c.id == id)
+						return c;
+				}
+				return null;
+			}
+
+			function select_vertex(id){
+				if($('#vertex_' + id).hasClass('selected')){
+					$('.vertex').removeClass('selected');
+					$('.info').html('-');
+				}else{
+					var selected = find_vertex(id);
+					if(selected != null){
+						$('#vertex_id').html(selected.id);
+						$('#vertex_name').html(selected.name);
+						$('#vertex_x').html(selected.x);
+						$('#vertex_y').html(selected.y);
+					}
+
+					$('.vertex').removeClass('selected');
+					$('#vertex_' + id).addClass('selected');
+				}
+			}
+
+			function calculate_distance(x1, y1, x2, y2){
+				return Math.sqrt(Math.pow(x1-x2, 2) + Math.pow(y1-y2, 2));
+			}
+
+			function is_collide(loc_x, loc_y){
+				for(var i in vertexs){
+					if(calculate_distance(vertexs[i].x, vertexs[i].y, loc_x, loc_y) < VERTEX_SIZE)
+						return true;
+				}
+				return false;
+			}
+
+			//add coordinate div
+			function add_vertex(loc_x, loc_y){
+				//check if collision
+				$('#status').html('-');
+				if(is_collide(loc_x, loc_y)){
+					$('#status').html('Cannot add vertex, collision detected...!');
+					return;
+				}
+
+				var vertex_name = prompt("Masukkan nama titik");
+
+				if (vertex_name == null)
+					return;
+
+				vertexs.push({name: vertex_name, id: vertex_id, x: loc_x, y: loc_y});
+				$('#status').html('Success add new vertex, ID = ' + vertex_id + ' | Name = ' + vertex_name);
+
+				vertex_id++;
+
+				rebuild_graph();
+			}
+
+			function delete_vertex(id){
+				var deleted_indices = [];
+				for(var i in edges){
+					if(edges[i].from == id || edges[i].to == id)
+						deleted_indices.push(i);
+				}
+				while(deleted_indices.length > 0){
+					var deleted = deleted_indices.pop();
+					edges.splice(deleted, 1);
+				}
+				var deleted_vertex = find_vertex(id);
+				if(deleted_vertex >= 0)
+					vertexs.splice(deleted_vertex, 1);
+
+				rebuild_graph();
+
+				$('#status').html('Success delete vertex, ID = ' + id);
+			}
+
+			function delete_edge(from, to){
+				var deleted_indices = [];
+				for(var i in edges){
+					if(edges[i].from == from && edges[i].to == to)
+						deleted_indices.push(i);
+				}
+				while(deleted_indices.length > 0){
+					var deleted = deleted_indices.pop();
+					edges.splice(deleted, 1);
+				}
+
+				rebuild_graph();
+
+				$('#status').html('Success delete edge, '+ from +' &rarr; ' + to);
+			}
+
+			function is_duplicate_edge(from, to){
+				for(var i in edges){
+					if(edges[i].from == from && edges[i].to == to || edges[i].from == to && edges[i].to == from)
+						return true;
+				}
+				return false;
+			}
+
+			$(document).ready(function() {
+				$('.actions').prop('disabled', true);
+			    $('#map-handler').click(function(e) {
+		            var offset = $(this).offset();
+		            var X = (e.pageX - offset.left);
+		            var Y = (e.pageY - offset.top);
+		            add_vertex(X, Y);
+		        });
+
+		        $('#btn-connect').click(function(){
+		        	var from = $('#vertex-from').val();
+		        	var to = $('#vertex-to').val();
+
+		        	if(from != to){
+		        		if(is_duplicate_edge(from, to)){
+		        			$('#status').html('Cannot add edge, duplicate detected...!');
+		        			return;
+		        		}
+		        		//add line
+		        		edges.push({from: from, to: to});
+
+						$('#status').html('Success add new edge, ' + from + ' &rarr; ' + to);
+
+		        		rebuild_graph();
+		        	}else
+		        		$('#status').html('Circular edge is not valid...!');
+		        });
+
+		        $('#btn-save').click(function(){
+		        	$('.actions').prop('disabled', true);
+		        	$.ajax({
+			            type : "POST",
+			            url  : "http://localhost/Tugas/save.php", //your page
+			            data : {
+			            	vertex: vertexs,
+			            	edge: edges
+			            },// passing the values
+			            success: function(res){
+			            	if(res == 'success')
+			            		alert('Data berhasil disimpan');
+			            	else
+			            		alert('Terjadi error');
+	                    }
+			       });
+		        	$('.actions').prop('disabled', false);
+		        });
+			});
+		</script>
+	</body>
+</html>
